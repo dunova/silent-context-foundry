@@ -93,9 +93,15 @@ It enables graceful silent degradation (vectorization-only path, no error spam) 
 
 ## Upstream Projects
 
+- OneContext: [TheAgentContextLab/OneContext](https://github.com/TheAgentContextLab/OneContext)
+- OpenViking: [volcengine/OpenViking](https://github.com/volcengine/OpenViking)
 - GSD: [gsd-build/get-shit-done](https://github.com/gsd-build/get-shit-done)
-- OpenViking: please use the official upstream repository for your installation source
-- OneContext / Aline: use the official upstream repository / distribution source used by your environment
+
+## Reference Forks (Published)
+
+- OneContext fork: [dunova/OneContext](https://github.com/dunova/OneContext)
+- OpenViking fork: [dunova/OpenViking](https://github.com/dunova/OpenViking)
+- GSD fork: [dunova/get-shit-done](https://github.com/dunova/get-shit-done)
 
 ## License
 
