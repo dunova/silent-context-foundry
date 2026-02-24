@@ -15,7 +15,10 @@ import logging
 import logging.handlers
 import os
 import re
-import resource
+try:
+    import resource as _resource_mod
+except ImportError:
+    _resource_mod = None  # type: ignore[assignment]
 import signal
 import sys
 import time
@@ -138,6 +141,12 @@ SECRET_REPLACEMENTS = [
     (re.compile(r"\bghp_[A-Za-z0-9]{20,}\b"), "ghp_***"),
     (re.compile(r"\bgho_[A-Za-z0-9]{20,}\b"), "gho_***"),
     (re.compile(r"\bAIza[A-Za-z0-9_-]{20,}\b"), "AIza***"),
+    # Slack tokens
+    (re.compile(r"\bxox[bprs]-[A-Za-z0-9\-]{10,}\b"), "xox?-***"),
+    # AWS access keys
+    (re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{12,}\b"), "AKIA***"),
+    # PEM private key blocks
+    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"), "***PEM_KEY_REDACTED***"),
 ]
 
 IGNORE_SHELL_CMD_PREFIXES = (
@@ -277,6 +286,21 @@ class SessionTracker:
         digest = hashlib.sha256(path.encode("utf-8")).hexdigest()[:10]
         return f"{kind}:{source_name}:{digest}"
 
+    @staticmethod
+    def _is_safe_source(path: str) -> bool:
+        """Verify source file is a regular file owned by the current user (not a symlink)."""
+        try:
+            st = os.lstat(path)
+        except OSError:
+            return False
+        if os.path.islink(path):
+            logger.warning("Skipping symlinked source: %s", path)
+            return False
+        if st.st_uid != os.getuid():
+            logger.warning("Skipping source not owned by current user: %s (uid=%d)", path, st.st_uid)
+            return False
+        return True
+
     # -- polling ----------------------------------------------------------
     def poll_jsonl_sources(self):
         now = time.time()
@@ -286,6 +310,8 @@ class SessionTracker:
             self._poll_jsonl_file(source_name, path, source, cursor_key, now)
 
     def _poll_jsonl_file(self, source_name: str, path: str, source: dict[str, Any], cursor_key: str, now: float):
+        if not self._is_safe_source(path):
+            return
         try:
             cur_size = os.path.getsize(path)
         except OSError:
@@ -329,6 +355,8 @@ class SessionTracker:
 
         now = time.time()
         for source_name, path in self.active_shell.items():
+            if not self._is_safe_source(path):
+                continue
             cursor_key = self._cursor_key("shell", source_name, path)
             try:
                 cur_size = os.path.getsize(path)
@@ -368,6 +396,8 @@ class SessionTracker:
             return
 
         for path in session_files:
+            if not self._is_safe_source(path):
+                continue
             try:
                 mtime = os.path.getmtime(path)
             except OSError:
@@ -753,12 +783,15 @@ class SessionTracker:
         self._last_heartbeat = now
 
         try:
-            rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-            # macOS reports bytes; Linux reports kilobytes
-            if sys.platform == "darwin":
-                mem_mb = rss / (1024 * 1024)
+            if _resource_mod is not None:
+                rss = _resource_mod.getrusage(_resource_mod.RUSAGE_SELF).ru_maxrss
+                # macOS reports bytes; Linux reports kilobytes
+                if sys.platform == "darwin":
+                    mem_mb = rss / (1024 * 1024)
+                else:
+                    mem_mb = rss / 1024
             else:
-                mem_mb = rss / 1024
+                mem_mb = -1
         except Exception:
             mem_mb = -1
 
@@ -817,6 +850,11 @@ def main():
 
         time.sleep(tracker.next_sleep_interval())
 
+    if tracker._http_client:
+        try:
+            tracker._http_client.close()
+        except Exception:
+            pass
     logger.info("Daemon shutdown complete. Exported %d sessions total.", tracker._export_count)
 
 
