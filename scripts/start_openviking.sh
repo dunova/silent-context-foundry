@@ -20,9 +20,21 @@ OPENVIKING_ALLOW_NAS_GENERATOR="${OPENVIKING_ALLOW_NAS_GENERATOR:-0}"
 LITELLM_LOCAL_MODEL_COST_MAP="${LITELLM_LOCAL_MODEL_COST_MAP:-True}"
 
 # Load secrets (contains GEMINI_API_KEY / OPENAI_API_KEY)
+# Safety: only parse KEY=VALUE lines instead of sourcing arbitrary shell code
 if [ -f "$HOME/.antigravity_secrets" ]; then
-    # shellcheck disable=SC1090
-    source "$HOME/.antigravity_secrets"
+    while IFS='=' read -r key value; do
+        # Skip empty lines and comments
+        case "$key" in
+            ''|\#*) continue ;;
+        esac
+        # Strip surrounding quotes from value
+        value="${value%\"}" ; value="${value#\"}"
+        value="${value%\'}" ; value="${value#\'}"
+        # Only export well-formed variable names
+        if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+            export "$key=$value"
+        fi
+    done < "$HOME/.antigravity_secrets"
 fi
 
 # Colors
@@ -109,6 +121,22 @@ fi
 echo "Using Python: $($PYTHON_EXEC --version)"
 
 # 1. Setup virtual environment if needed
+# Safety: prevent rm -rf on unexpected paths
+case "$VENV_DIR" in
+    /|/usr|/usr/*|/etc|/var|/tmp|/home|/System|/Library)
+        echo -e "${RED}Error: OPENVIKING_VENV_DIR points to a dangerous path: $VENV_DIR${NC}"
+        exit 1
+        ;;
+esac
+REAL_VENV_DIR="$(cd "$(dirname "$VENV_DIR")" 2>/dev/null && pwd)/$(basename "$VENV_DIR")" || REAL_VENV_DIR="$VENV_DIR"
+case "$REAL_VENV_DIR" in
+    "$HOME"/*) ;; # acceptable
+    *)
+        echo -e "${RED}Error: OPENVIKING_VENV_DIR must be under \$HOME ($HOME). Got: $REAL_VENV_DIR${NC}"
+        exit 1
+        ;;
+esac
+
 NEED_RECREATE=0
 if [ -d "$VENV_DIR" ]; then
     VENV_PYTHON_VER=$("$VENV_DIR/bin/python" --version 2>/dev/null || echo "None")

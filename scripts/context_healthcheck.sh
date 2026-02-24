@@ -120,7 +120,9 @@ check_log_size() {
         local size_mb=$(( $(file_size_bytes "$path") / 1048576 ))
         if [ "$size_mb" -gt "$max_mb" ]; then
             REPORT+="  ⚠️  $label: ${size_mb}MB (>${max_mb}MB) – truncating\n"
-            tail -c $((max_mb * 1048576 / 2)) "$path" > "${path}.tmp" && mv "${path}.tmp" "$path"
+            local tmpfile
+            tmpfile="$(mktemp "${path}.XXXXXX")" || { REPORT+="  ❌ $label: failed to create tmpfile\n"; return; }
+            tail -c $((max_mb * 1048576 / 2)) "$path" > "$tmpfile" && mv "$tmpfile" "$path" || rm -f "$tmpfile"
             STATUS=1
         else
             REPORT+="  ✅ $label: ${size_mb}MB\n"

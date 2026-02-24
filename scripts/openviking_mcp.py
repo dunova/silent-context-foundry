@@ -150,7 +150,7 @@ def _build_snippet(text: str, query: str, use_regex: bool, radius: int = 80) -> 
     if not compact:
         return ""
 
-    if use_regex:
+    if use_regex and len(query) <= 200:
         try:
             pattern = re.compile(query, re.IGNORECASE)
             match = pattern.search(compact)
@@ -228,10 +228,14 @@ def _sqlite_search(query: str, search_type: str, limit: int, no_regex: bool) -> 
     use_regex = not no_regex
     regex_obj = None
     if use_regex:
-        try:
-            regex_obj = re.compile(query, re.IGNORECASE)
-        except re.error as exc:
-            return f"OneContext fallback failed: invalid regex `{query}` ({exc})"
+        # Guard against ReDoS: reject overly complex patterns
+        if len(query) > 200:
+            use_regex = False
+        else:
+            try:
+                regex_obj = re.compile(query, re.IGNORECASE)
+            except re.error as exc:
+                return f"OneContext fallback failed: invalid regex `{query}` ({exc})"
 
     def _matched(text: str) -> bool:
         if not text:

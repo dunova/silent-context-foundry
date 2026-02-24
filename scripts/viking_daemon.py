@@ -112,9 +112,15 @@ SECRET_REPLACEMENTS = [
     (re.compile(r"(api[_-]?key\s*[=:]\s*)([^\s\"']+)", re.IGNORECASE), r"\1***"),
     (re.compile(r"(token\s*[=:]\s*)([^\s\"']+)", re.IGNORECASE), r"\1***"),
     (re.compile(r"(password\s*[=:]\s*)([^\s\"']+)", re.IGNORECASE), r"\1***"),
+    (re.compile(r"(secret\s*[=:]\s*)([^\s\"']+)", re.IGNORECASE), r"\1***"),
     (re.compile(r"(--api-key\s+)([^\s]+)", re.IGNORECASE), r"\1***"),
     (re.compile(r"(--token\s+)([^\s]+)", re.IGNORECASE), r"\1***"),
-    (re.compile(r"\b(sk-[A-Za-z0-9_-]{16,})\b"), "sk-***"),
+    (re.compile(r"(Authorization\s*:\s*Bearer\s+)([^\s\"']+)", re.IGNORECASE), r"\1***"),
+    (re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"), "sk-***"),
+    (re.compile(r"\bsk-proj-[A-Za-z0-9_-]{16,}\b"), "sk-proj-***"),
+    (re.compile(r"\bghp_[A-Za-z0-9]{20,}\b"), "ghp_***"),
+    (re.compile(r"\bgho_[A-Za-z0-9]{20,}\b"), "gho_***"),
+    (re.compile(r"\bAIza[A-Za-z0-9_-]{20,}\b"), "AIza***"),
 ]
 
 IGNORE_SHELL_CMD_PREFIXES = (
@@ -126,6 +132,10 @@ IGNORE_SHELL_CMD_PREFIXES = (
 # Logging setup
 # ---------------------------------------------------------------------------
 LOG_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    os.chmod(LOG_DIR, 0o700)
+except OSError:
+    pass
 log_file = LOG_DIR / "viking_daemon.log"
 
 logger = logging.getLogger("viking_daemon")
