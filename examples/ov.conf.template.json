@@ -1,0 +1,24 @@
+{
+  "storage": {
+    "vectordb": { "name": "context", "backend": "local", "path": "${OPENVIKING_DATA_DIR}" },
+    "agfs": { "backend": "local", "path": "${OPENVIKING_DATA_DIR}", "port": 1833 }
+  },
+  "embedding": {
+    "dense": {
+      "model": "gemini/gemini-embedding-001",
+      "provider": "litellm",
+      "api_key": "${GEMINI_API_KEY}",
+      "dimension": 3072
+    }
+  },
+  "vlm": {
+    "model": "gemini/gemini-1.5-pro",
+    "provider": "gemini",
+    "api_key": "${GEMINI_API_KEY}",
+    "temperature": 0.0,
+    "max_retries": 2
+  },
+  "default_search_mode": "fast",
+  "default_search_limit": 3,
+  "log_level": "INFO"
+}

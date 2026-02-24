@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Local runtime/data
+.env
+.env.*
+*.log
+logs/
+data/
+.tmp/
+
+# macOS
+.DS_Store
+
+# Secrets/config
+*.secret
+ov.conf
+*.bak
+
+# Editor
+.vscode/
+.idea/

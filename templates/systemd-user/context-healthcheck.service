@@ -1,0 +1,6 @@
+[Unit]
+Description=Unified Context Healthcheck (user)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash %h/.local/share/silent-context-foundry/scripts/context_healthcheck.sh --quiet

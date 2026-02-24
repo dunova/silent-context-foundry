@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.openviking.daemon</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/env</string>
+    <string>python3</string>
+    <string>__SCRIPTS_DIR__/viking_daemon.py</string>
+  </array>
+  <key>WorkingDirectory</key><string>__SCRIPTS_DIR__</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>__LOG_DIR__/viking_daemon_launchd.log</string>
+  <key>StandardErrorPath</key><string>__LOG_DIR__/viking_daemon_launchd.err</string>
+</dict>
+</plist>
