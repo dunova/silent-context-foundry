@@ -6,6 +6,7 @@ __pycache__/
 # Local runtime/data
 .env
 .env.*
+!.env.example
 *.log
 logs/
 data/

@@ -714,7 +714,12 @@ class SessionTracker:
         self._last_heartbeat = now
 
         try:
-            mem_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024)
+            rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            # macOS reports bytes; Linux reports kilobytes
+            if sys.platform == "darwin":
+                mem_mb = rss / (1024 * 1024)
+            else:
+                mem_mb = rss / 1024
         except Exception:
             mem_mb = -1
 

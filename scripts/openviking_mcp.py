@@ -158,7 +158,11 @@ def _build_snippet(text: str, query: str, use_regex: bool, radius: int = 80) -> 
             match = None
     else:
         idx = compact.lower().find(query.lower())
-        match = None if idx < 0 else type("Match", (), {"start": lambda self=idx: idx, "end": lambda self=idx + len(query): idx + len(query)})()
+        if idx < 0:
+            match = None
+        else:
+            _s, _e = idx, idx + len(query)
+            match = type("_Span", (), {"start": staticmethod(lambda _s=_s: _s), "end": staticmethod(lambda _e=_e: _e)})()
 
     if not match:
         return compact[: radius * 2]
@@ -239,6 +243,7 @@ def _sqlite_search(query: str, search_type: str, limit: int, no_regex: bool) -> 
     results: list[dict[str, Any]] = []
     hard_limit = max(limit, 1) * 8
 
+    conn = None
     try:
         conn = sqlite3.connect(ALINE_DB_PATH)
         conn.row_factory = sqlite3.Row
@@ -332,10 +337,11 @@ def _sqlite_search(query: str, search_type: str, limit: int, no_regex: bool) -> 
                             "snippet": _build_snippet(text, query, use_regex, radius=120),
                         }
                     )
-
-        conn.close()
     except Exception as exc:
         return f"OneContext fallback failed: sqlite query error ({exc})"
+    finally:
+        if conn:
+            conn.close()
 
     if not results:
         return "No matches found in OneContext history (sqlite fallback)."
