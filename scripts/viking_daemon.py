@@ -27,6 +27,13 @@ from typing import Any
 # Configuration
 # ---------------------------------------------------------------------------
 OPENVIKING_URL = os.environ.get("OPENVIKING_URL", "http://127.0.0.1:8090/api/v1")
+
+# Security: require HTTPS for non-localhost URLs to prevent MITM
+_ov_host = OPENVIKING_URL.split("://", 1)[-1].split("/", 1)[0].split(":")[0]
+if _ov_host not in ("127.0.0.1", "localhost", "::1") and not OPENVIKING_URL.startswith("https://"):
+    print(f"FATAL: Remote OPENVIKING_URL must use https://. Got: {OPENVIKING_URL}", file=sys.stderr)
+    raise SystemExit(1)
+
 LOCAL_STORAGE_ROOT = Path(
     os.environ.get(
         "UNIFIED_CONTEXT_STORAGE_ROOT",
@@ -34,6 +41,16 @@ LOCAL_STORAGE_ROOT = Path(
     )
 ).expanduser()
 PENDING_DIR = LOCAL_STORAGE_ROOT / "resources" / "shared" / "history" / ".pending"
+
+# Security: verify storage root is not a symlink and is owned by current user
+if LOCAL_STORAGE_ROOT.exists():
+    _storage_stat = LOCAL_STORAGE_ROOT.lstat()
+    if _storage_stat.st_uid != os.getuid():
+        print(f"FATAL: {LOCAL_STORAGE_ROOT} is not owned by current user (uid={_storage_stat.st_uid})", file=sys.stderr)
+        raise SystemExit(1)
+    if LOCAL_STORAGE_ROOT.is_symlink():
+        print(f"WARNING: {LOCAL_STORAGE_ROOT} is a symlink – following cautiously", file=sys.stderr)
+
 LOG_DIR = Path.home() / ".context_system" / "logs"
 
 CODEX_SESSIONS = str(Path.home() / ".codex" / "sessions")
@@ -197,12 +214,18 @@ class SessionTracker:
 
         if _HTTPX_OK:
             try:
-                self._http_client = httpx.Client(trust_env=False, follow_redirects=True)
+                self._http_client = httpx.Client(
+                    timeout=EXPORT_HTTP_TIMEOUT_SEC, trust_env=False, follow_redirects=False
+                )
             except Exception as exc:
                 logger.warning("Failed to initialize httpx client: %s", exc)
                 self._http_client = None
 
         PENDING_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(PENDING_DIR, 0o700)
+        except OSError:
+            pass
         self.refresh_sources(force=True)
 
     # -- source discovery -------------------------------------------------
@@ -251,7 +274,7 @@ class SessionTracker:
                     del self.active_shell[source_name]
 
     def _cursor_key(self, kind: str, source_name: str, path: str) -> str:
-        digest = hashlib.md5(path.encode("utf-8")).hexdigest()[:10]
+        digest = hashlib.sha256(path.encode("utf-8")).hexdigest()[:10]
         return f"{kind}:{source_name}:{digest}"
 
     # -- polling ----------------------------------------------------------
@@ -532,7 +555,7 @@ class SessionTracker:
             }
 
         sess = self.sessions[sid]
-        digest = hashlib.md5(text.encode("utf-8")).hexdigest()
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
         if digest == sess.get("last_hash"):
             return
 
@@ -570,8 +593,10 @@ class SessionTracker:
             min_messages = 4 if source.startswith("shell_") else 2
             if len(data["messages"]) >= min_messages:
                 self._export(sid, data)
-
-            data["exported"] = True
+                data["exported"] = True
+            elif now - data.get("created", 0) > SESSION_TTL_SEC:
+                # Discard stale sessions with insufficient messages
+                data["exported"] = True
 
         for sid in to_remove:
             del self.sessions[sid]
@@ -597,6 +622,10 @@ class SessionTracker:
 
         local_dir = LOCAL_STORAGE_ROOT / "resources" / "shared" / "history"
         local_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(local_dir, 0o700)
+        except OSError:
+            pass
         file_path = local_dir / f"{source}_{ts}_{sid[:12]}.md"
 
         formatted = (

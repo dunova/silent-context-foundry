@@ -181,7 +181,12 @@ export OPENVIKING_DATA_DIR
 if [ -n "$GENERATOR_SCRIPT" ] && [[ "$GENERATOR_SCRIPT" == /Volumes/* ]] && [ "$OPENVIKING_ALLOW_NAS_GENERATOR" != "1" ]; then
     echo -e "${YELLOW}Warning: Skip NAS generator path ($GENERATOR_SCRIPT). Set OPENVIKING_ALLOW_NAS_GENERATOR=1 to enable.${NC}"
 elif [ -n "$GENERATOR_SCRIPT" ] && [ -f "$GENERATOR_SCRIPT" ]; then
-    if ! python - "$GENERATOR_SCRIPT" "$OPENVIKING_GENERATOR_TIMEOUT_SEC" <<'PY'
+    # Safety: only execute generator scripts owned by the current user
+    GENERATOR_OWNER=$(stat -f%u "$GENERATOR_SCRIPT" 2>/dev/null || stat -c%u "$GENERATOR_SCRIPT" 2>/dev/null || echo "-1")
+    if [ "$GENERATOR_OWNER" != "$(id -u)" ]; then
+        echo -e "${RED}Error: Config generator $GENERATOR_SCRIPT is not owned by current user (owner=$GENERATOR_OWNER). Skipping.${NC}"
+    else
+        if ! python - "$GENERATOR_SCRIPT" "$OPENVIKING_GENERATOR_TIMEOUT_SEC" <<'PY'
 import subprocess, sys
 script = sys.argv[1]
 timeout_sec = int(sys.argv[2])
@@ -191,8 +196,9 @@ except subprocess.TimeoutExpired:
     print(f"Generator timeout after {timeout_sec}s: {script}", file=sys.stderr)
     sys.exit(124)
 PY
-    then
-        echo -e "${YELLOW}Warning: Config generator failed/timed out; continuing with existing config if present.${NC}"
+        then
+            echo -e "${YELLOW}Warning: Config generator failed/timed out; continuing with existing config if present.${NC}"
+        fi
     fi
 else
     echo -e "${YELLOW}Warning: No local config generator found; using existing config if present.${NC}"

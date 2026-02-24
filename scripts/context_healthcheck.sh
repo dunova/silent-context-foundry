@@ -8,6 +8,7 @@ LOG_DIR="$HOME/.context_system/logs"
 HEALTHCHECK_LOG="$LOG_DIR/healthcheck.log"
 UNIFIED_CONTEXT_STORAGE_ROOT="${UNIFIED_CONTEXT_STORAGE_ROOT:-${OPENVIKING_STORAGE_ROOT:-$HOME/.unified_context_data}}"
 mkdir -p "$LOG_DIR"
+chmod 700 "$LOG_DIR" 2>/dev/null || true
 PRINT_STDOUT=1
 DEEP_PROBE=0
 while [ $# -gt 0 ]; do
@@ -211,7 +212,9 @@ check_log_size "aline_watcher_stderr" "$HOME/.aline/.logs/watcher_stderr.log" 20
 check_log_size "aline_llm" "$HOME/.aline/.logs/llm.log" 200
 
 REPORT+="\nAline DB:\n"
-if [ -f "$HOME/.aline/db/aline.db" ]; then
+if ! command -v sqlite3 >/dev/null 2>&1; then
+    REPORT+="  ℹ️  sqlite3 not found, skipping DB checks\n"
+elif [ -f "$HOME/.aline/db/aline.db" ]; then
     RECENT=$(sqlite3 "$HOME/.aline/db/aline.db" "SELECT count(*) FROM sessions WHERE created_at > datetime('now', '-2 hours');" 2>/dev/null || echo "ERR")
     if [ "$RECENT" = "0" ] || [ "$RECENT" = "ERR" ]; then
         REPORT+="  ⚠️  No new sessions in the last 2 hours ($RECENT)\n"
@@ -252,7 +255,10 @@ echo -e "$REPORT" >> "$HEALTHCHECK_LOG"
 
 HC_SIZE=$(( $(file_size_bytes "$HEALTHCHECK_LOG") / 1048576 ))
 if [ "$HC_SIZE" -gt 5 ]; then
-    tail -c 2621440 "$HEALTHCHECK_LOG" > "${HEALTHCHECK_LOG}.tmp" && mv "${HEALTHCHECK_LOG}.tmp" "$HEALTHCHECK_LOG"
+    HC_TMPFILE="$(mktemp "${HEALTHCHECK_LOG}.XXXXXX")" && \
+        tail -c 2621440 "$HEALTHCHECK_LOG" > "$HC_TMPFILE" && \
+        mv "$HC_TMPFILE" "$HEALTHCHECK_LOG" || \
+        rm -f "$HC_TMPFILE" 2>/dev/null
 fi
 
 exit $STATUS

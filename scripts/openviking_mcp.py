@@ -14,13 +14,19 @@ from mcp.server.fastmcp import FastMCP
 mcp = FastMCP("OpenViking Global Memory Server")
 
 OPENVIKING_URL = os.environ.get("OPENVIKING_URL", "http://127.0.0.1:8090/api/v1")
+
+# Security: require HTTPS for non-localhost URLs to prevent MITM
+_ov_host = OPENVIKING_URL.split("://", 1)[-1].split("/", 1)[0].split(":")[0]
+if _ov_host not in ("127.0.0.1", "localhost", "::1") and not OPENVIKING_URL.startswith("https://"):
+    raise SystemExit(f"Remote OPENVIKING_URL must use https://. Got: {OPENVIKING_URL}")
+
 LOCAL_STORAGE_ROOT = os.path.expanduser(
     os.environ.get("UNIFIED_CONTEXT_STORAGE_ROOT", os.environ.get("OPENVIKING_STORAGE_ROOT", "~/.unified_context_data"))
 )
 ALINE_DB_PATH = os.path.expanduser("~/.aline/db/aline.db")
 VALID_SEARCH_TYPES = {"all", "event", "session", "turn", "content"}
 HTTP_TIMEOUT_SEC = max(int(os.environ.get("OPENVIKING_HTTP_TIMEOUT_SEC", "20")), 3)
-HTTP_CLIENT = httpx.Client(timeout=HTTP_TIMEOUT_SEC, trust_env=False, follow_redirects=True)
+HTTP_CLIENT = httpx.Client(timeout=HTTP_TIMEOUT_SEC, trust_env=False, follow_redirects=False)
 OPENVIKING_ROOT_URL = OPENVIKING_URL.split("/api/", 1)[0].rstrip("/")
 
 
@@ -376,6 +382,10 @@ def save_conversation_memory(title: str, content: str, tags: list[str] | str | N
 
     local_path = os.path.join(LOCAL_STORAGE_ROOT, "resources", "shared", "conversations")
     os.makedirs(local_path, exist_ok=True)
+    try:
+        os.chmod(local_path, 0o700)
+    except OSError:
+        pass
     file_path = os.path.join(local_path, f"{timestamp}_{filename_title}.md")
 
     formatted_content = f"# {title}\n\nTags: {', '.join(tags)}\nDate: {datetime.now().isoformat()}\n\n{content}\n"
