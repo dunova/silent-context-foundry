@@ -12,11 +12,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Install minimal runtime deps for import smoke
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install httpx mcp
       - name: Bash syntax
         run: |
           for f in scripts/*.sh; do bash -n "$f"; done
       - name: Python syntax
         run: python -m py_compile scripts/*.py
+      - name: Import smoke
+        run: |
+          python - <<'PY'
+          import httpx
+          from mcp.server.fastmcp import FastMCP
+          print("import smoke ok", httpx.__version__, FastMCP.__name__)
+          PY
       - name: Secret/path scan (basic)
         run: |
           ! rg -n "AIza[0-9A-Za-z_-]{20,}|sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}" .

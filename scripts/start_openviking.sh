@@ -20,13 +20,28 @@ OPENVIKING_ALLOW_NAS_GENERATOR="${OPENVIKING_ALLOW_NAS_GENERATOR:-0}"
 LITELLM_LOCAL_MODEL_COST_MAP="${LITELLM_LOCAL_MODEL_COST_MAP:-True}"
 
 # Load secrets (contains GEMINI_API_KEY / OPENAI_API_KEY)
-# Safety: only parse KEY=VALUE lines instead of sourcing arbitrary shell code
+# Safety: parse KEY=VALUE / export KEY=VALUE lines instead of sourcing arbitrary shell code
 if [ -f "$HOME/.antigravity_secrets" ]; then
-    while IFS='=' read -r key value; do
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Trim leading/trailing whitespace
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
         # Skip empty lines and comments
-        case "$key" in
+        case "$line" in
             ''|\#*) continue ;;
         esac
+        # Support both "KEY=VALUE" and "export KEY=VALUE"
+        case "$line" in
+            export[[:space:]]*) line="${line#export }" ;;
+        esac
+        case "$line" in
+            *=*) ;;
+            *) continue ;;
+        esac
+        key="${line%%=*}"
+        value="${line#*=}"
+        key="${key#"${key%%[![:space:]]*}"}"
+        key="${key%"${key##*[![:space:]]}"}"
         # Strip surrounding quotes from value
         value="${value%\"}" ; value="${value#\"}"
         value="${value%\'}" ; value="${value#\'}"

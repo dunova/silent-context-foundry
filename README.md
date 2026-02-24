@@ -72,6 +72,9 @@ cd silent-context-foundry
 # 2. Configure environment
 cp .env.example .env
 # Edit .env -- at minimum set GEMINI_API_KEY
+# Optional local secrets file format is supported by the launcher:
+#   GEMINI_API_KEY=...
+#   export GEMINI_API_KEY=...
 
 # 3. Configure OpenViking
 cp examples/ov.conf.template.json ~/.openviking_data/ov.conf
@@ -117,9 +120,16 @@ systemctl --user enable --now context-healthcheck.timer
 
 - No secrets committed in this repo.
 - Daemon scrubs common token/password patterns (API keys, `sk-*`, `--token`, `--api-key`) before export.
+- `start_openviking.sh` safely parses local secrets files (no `source`) and supports both `KEY=VALUE` and `export KEY=VALUE`.
 - Config files (`ov.conf`, secrets) expected at mode `0600`.
 - HTTP clients use `trust_env=False` to avoid leaking proxy/env credentials.
 - See [SECURITY.md](SECURITY.md) for full threat model.
+
+## Healthcheck Semantics
+
+- `context_healthcheck.sh` reports **CLI missing** as warning (`⚠️`).
+- It reports **CLI execution errors** as failure (`❌`).
+- It treats **\"no matches found\"** as a successful callable state (`✅`), avoiding false failures.
 
 ## OpenViking Semantic Queue Caveat
 
@@ -211,6 +221,9 @@ cd silent-context-foundry
 # 2. 配置环境变量
 cp .env.example .env
 # 编辑 .env -- 至少设置 GEMINI_API_KEY
+# 启动脚本支持本地密钥文件两种格式：
+#   GEMINI_API_KEY=...
+#   export GEMINI_API_KEY=...
 
 # 3. 配置 OpenViking
 cp examples/ov.conf.template.json ~/.openviking_data/ov.conf
@@ -245,9 +258,16 @@ systemctl --user enable --now context-healthcheck.timer
 
 - 仓库中不包含任何密钥。
 - 守护进程在导出前自动清洗常见 Token/密码模式。
+- `start_openviking.sh` 不会 `source` 密钥文件，而是安全解析；同时支持 `KEY=VALUE` 与 `export KEY=VALUE`。
 - 配置文件（`ov.conf`、secrets）应保持 `0600` 权限。
 - HTTP 客户端使用 `trust_env=False` 防止代理/环境凭据泄露。
 - 详见 [SECURITY.md](SECURITY.md)。
+
+### 健康检查语义
+
+- `context_healthcheck.sh` 将 **CLI 未安装** 标记为警告（`⚠️`）。
+- 将 **CLI 执行错误** 标记为失败（`❌`）。
+- 将 **无匹配结果** 视为“命令可用”的成功状态（`✅`），避免误报。
 
 ### 许可证
 

@@ -82,23 +82,30 @@ check_openviking_api() {
 check_onecontext() {
     local rc=127
     local cli_name=""
+    local cli_output=""
     if command -v onecontext >/dev/null 2>&1; then
         cli_name="onecontext"
-        onecontext search "healthcheck" -t all -l 1 >/dev/null 2>&1
+        set +e
+        cli_output="$(onecontext search "healthcheck" -t all -l 1 2>&1)"
         rc=$?
+        set -e
     elif command -v aline >/dev/null 2>&1; then
         cli_name="aline"
-        aline search "healthcheck" -t all -l 1 >/dev/null 2>&1
+        set +e
+        cli_output="$(aline search "healthcheck" -t all -l 1 2>&1)"
         rc=$?
+        set -e
     fi
 
     if [ "$rc" = "0" ]; then
         REPORT+="  ✅ onecontext-search: callable ($cli_name)\n"
     elif [ "$rc" = "127" ]; then
         REPORT+="  ⚠️  onecontext-search: no cli command found\n"
+    elif echo "$cli_output" | grep -Eq 'Found 0 matches|No matches found'; then
+        REPORT+="  ✅ onecontext-search: callable ($cli_name, no matches)\n"
     else
-        # Non-zero but command exists: likely "no matches" rather than failure
-        REPORT+="  ✅ onecontext-search: callable ($cli_name, exit=$rc)\n"
+        REPORT+="  ❌ onecontext-search: error ($cli_name, exit=$rc)\n"
+        STATUS=1
     fi
 }
 

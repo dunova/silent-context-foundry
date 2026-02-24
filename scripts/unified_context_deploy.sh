@@ -123,7 +123,7 @@ launch = home / 'Library' / 'LaunchAgents'
 script_dir = Path(os.environ['CANON_OV_SCRIPTS_ROOT'])
 
 # Resolve python3 path dynamically instead of hardcoding a brew-specific path
-_python3_bin = shutil.which('python3') or '/usr/bin/env python3'
+_python3_bin = shutil.which('python3')
 # Prefer the higher-version brew python if available
 for _candidate in ['/opt/homebrew/opt/python@3.13/libexec/bin/python3',
                    '/opt/homebrew/opt/python@3.11/libexec/bin/python3']:
@@ -131,10 +131,15 @@ for _candidate in ['/opt/homebrew/opt/python@3.13/libexec/bin/python3',
         _python3_bin = _candidate
         break
 
+if _python3_bin:
+    _daemon_program_args = [_python3_bin, str(script_dir / 'viking_daemon.py')]
+else:
+    _daemon_program_args = ['/usr/bin/env', 'python3', str(script_dir / 'viking_daemon.py')]
+
 patches = [
     (
         launch / 'com.openviking.daemon.plist',
-        [_python3_bin, str(script_dir / 'viking_daemon.py')],
+        _daemon_program_args,
         str(script_dir),
         {},
     ),
