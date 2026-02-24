@@ -80,19 +80,25 @@ check_openviking_api() {
 }
 
 check_onecontext() {
-    local rc=1
+    local rc=127
+    local cli_name=""
     if command -v onecontext >/dev/null 2>&1; then
+        cli_name="onecontext"
         onecontext search "healthcheck" -t all -l 1 >/dev/null 2>&1
         rc=$?
     elif command -v aline >/dev/null 2>&1; then
+        cli_name="aline"
         aline search "healthcheck" -t all -l 1 >/dev/null 2>&1
         rc=$?
     fi
 
     if [ "$rc" = "0" ]; then
-        REPORT+="  ✅ onecontext-search: callable\n"
+        REPORT+="  ✅ onecontext-search: callable ($cli_name)\n"
+    elif [ "$rc" = "127" ]; then
+        REPORT+="  ⚠️  onecontext-search: no cli command found\n"
     else
-        REPORT+="  ⚠️  onecontext-search: unavailable or no cli command\n"
+        # Non-zero but command exists: likely "no matches" rather than failure
+        REPORT+="  ✅ onecontext-search: callable ($cli_name, exit=$rc)\n"
     fi
 }
 

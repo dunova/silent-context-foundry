@@ -208,7 +208,7 @@ signal.signal(signal.SIGINT, _handle_signal)
 class SessionTracker:
     def __init__(self):
         self.sessions: dict[str, dict[str, Any]] = {}
-        self.file_cursors: dict[str, int] = {}
+        self.file_cursors: dict[str, tuple[int, int]] = {}  # cursor_key -> (inode, offset)
         self.antigravity_sessions: dict[str, dict[str, Any]] = {}
         self.active_jsonl: dict[str, dict[str, Any]] = {}
         self.active_shell: dict[str, str] = {}
@@ -257,7 +257,7 @@ class SessionTracker:
                 self.active_jsonl[source_name] = picked
                 if not prev or prev["path"] != picked["path"]:
                     cursor_key = self._cursor_key("jsonl", source_name, picked["path"])
-                    self.file_cursors[cursor_key] = os.path.getsize(picked["path"])
+                    self._set_cursor(cursor_key, picked["path"], os.path.getsize(picked["path"]))
                     logger.info("Source active: %s -> %s", source_name, picked["path"])
             elif source_name in self.active_jsonl:
                 logger.info("Source offline: %s", source_name)
@@ -276,7 +276,7 @@ class SessionTracker:
                     self.active_shell[source_name] = picked_path
                     if prev != picked_path:
                         cursor_key = self._cursor_key("shell", source_name, picked_path)
-                        self.file_cursors[cursor_key] = os.path.getsize(picked_path)
+                        self._set_cursor(cursor_key, picked_path, os.path.getsize(picked_path))
                         logger.info("Source active: %s -> %s", source_name, picked_path)
                 elif source_name in self.active_shell:
                     logger.info("Source offline: %s", source_name)
@@ -285,6 +285,33 @@ class SessionTracker:
     def _cursor_key(self, kind: str, source_name: str, path: str) -> str:
         digest = hashlib.sha256(path.encode("utf-8")).hexdigest()[:10]
         return f"{kind}:{source_name}:{digest}"
+
+    def _get_cursor(self, cursor_key: str, path: str) -> int:
+        """Return the byte offset for path, resetting to 0 if the file was rotated (inode changed)."""
+        try:
+            st = os.stat(path)
+        except OSError:
+            return 0
+        cur_inode = st.st_ino
+        prev = self.file_cursors.get(cursor_key)
+        if prev is None:
+            # First time: start at current size to skip existing content
+            return st.st_size
+        prev_inode, prev_offset = prev
+        if cur_inode != prev_inode:
+            # File was rotated/replaced
+            return 0
+        if st.st_size < prev_offset:
+            # File was truncated
+            return 0
+        return prev_offset
+
+    def _set_cursor(self, cursor_key: str, path: str, offset: int) -> None:
+        try:
+            inode = os.stat(path).st_ino
+        except OSError:
+            return
+        self.file_cursors[cursor_key] = (inode, offset)
 
     @staticmethod
     def _is_safe_source(path: str) -> bool:
@@ -317,11 +344,9 @@ class SessionTracker:
         except OSError:
             return
 
-        last = self.file_cursors.get(cursor_key, cur_size)
-        if cur_size < last:
-            last = 0
+        last = self._get_cursor(cursor_key, path)
         if cur_size <= last:
-            self.file_cursors[cursor_key] = cur_size
+            self._set_cursor(cursor_key, path, cur_size)
             return
 
         try:
@@ -344,7 +369,7 @@ class SessionTracker:
 
                     self._upsert_session(sid, source_name, text, now)
 
-            self.file_cursors[cursor_key] = cur_size
+            self._set_cursor(cursor_key, path, cur_size)
         except Exception as exc:
             self._error_count += 1
             logger.error("poll_jsonl_sources(%s): %s", source_name, exc)
@@ -363,11 +388,9 @@ class SessionTracker:
             except OSError:
                 continue
 
-            last = self.file_cursors.get(cursor_key, cur_size)
-            if cur_size < last:
-                last = 0
+            last = self._get_cursor(cursor_key, path)
             if cur_size <= last:
-                self.file_cursors[cursor_key] = cur_size
+                self._set_cursor(cursor_key, path, cur_size)
                 continue
 
             try:
@@ -379,7 +402,7 @@ class SessionTracker:
                             continue
                         sid, text = parsed
                         self._upsert_session(sid, source_name, text, now)
-                self.file_cursors[cursor_key] = cur_size
+                self._set_cursor(cursor_key, path, cur_size)
             except Exception as exc:
                 self._error_count += 1
                 logger.error("poll_shell_sources(%s): %s", source_name, exc)
@@ -411,11 +434,9 @@ class SessionTracker:
             except OSError:
                 continue
 
-            last = self.file_cursors.get(cursor_key, cur_size)
-            if cur_size < last:
-                last = 0
+            last = self._get_cursor(cursor_key, path)
             if cur_size <= last:
-                self.file_cursors[cursor_key] = cur_size
+                self._set_cursor(cursor_key, path, cur_size)
                 continue
 
             try:
@@ -450,7 +471,7 @@ class SessionTracker:
                             sid = os.path.basename(path)
                             self._upsert_session(sid, "codex_session", text, now)
 
-                self.file_cursors[cursor_key] = cur_size
+                self._set_cursor(cursor_key, path, cur_size)
             except Exception as exc:
                 self._error_count += 1
                 logger.error("poll_codex_sessions(%s): %s", path, exc)

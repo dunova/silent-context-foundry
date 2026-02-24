@@ -1,3 +1,4 @@
+import atexit
 from datetime import datetime
 import json
 import os
@@ -27,6 +28,7 @@ ALINE_DB_PATH = os.path.expanduser("~/.aline/db/aline.db")
 VALID_SEARCH_TYPES = {"all", "event", "session", "turn", "content"}
 HTTP_TIMEOUT_SEC = max(int(os.environ.get("OPENVIKING_HTTP_TIMEOUT_SEC", "20")), 3)
 HTTP_CLIENT = httpx.Client(timeout=HTTP_TIMEOUT_SEC, trust_env=False, follow_redirects=False)
+atexit.register(HTTP_CLIENT.close)
 OPENVIKING_ROOT_URL = OPENVIKING_URL.split("/api/", 1)[0].rstrip("/")
 
 
