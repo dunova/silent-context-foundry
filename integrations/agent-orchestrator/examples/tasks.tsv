@@ -1,0 +1,4 @@
+# ISSUE<TAB>PROMPT  (issue optional; plain prompt line also works)
+#42	Review and harden README Quick Start for macOS + Linux split paths
+#43	Add an integration test checklist for AO manager-layer docs and scripts
+Draft a troubleshooting section for AO + SCF (pnpm, gh auth, tmux, codex prerequisites)

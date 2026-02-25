@@ -14,7 +14,7 @@ Shell history is also a goldmine of context (commands tried, paths explored, deb
 
 ## What This Does
 
-Silent Context Foundry gives all your AI terminals a **shared, persistent, searchable memory**. It works by connecting three open-source systems into a single pipeline:
+Silent Context Foundry gives all your AI terminals a **shared, persistent, searchable memory**. It works by connecting three open-source systems into a single pipeline, and can optionally add a fourth manager layer (Agent Orchestrator) for parallel execution automation:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -41,7 +41,7 @@ Silent Context Foundry gives all your AI terminals a **shared, persistent, searc
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**In plain language:**
+**In plain language (base 3-system stack):**
 
 1. A background **daemon** watches your terminal histories in real time (Claude Code, Codex, OpenCode, Kilo, Gemini Antigravity, zsh/bash). When a session goes idle, the daemon sanitizes the content (stripping API keys, tokens, passwords) and saves it as a local Markdown file.
 
@@ -57,6 +57,15 @@ Silent Context Foundry gives all your AI terminals a **shared, persistent, searc
 
 **Net effect:** when you start a new Claude Code session and ask "what did I try last week to fix the auth bug?", the MCP server searches across ALL your past terminal sessions -- regardless of which AI tool you used -- and returns the relevant context.
 
+## Optional 4th Layer: Agent Orchestrator (AO)
+
+SCF gives your AI tools shared memory and process discipline (with GSD), but it does not manage multiple coding-agent sessions for you. If your bottleneck is now "babysitting agents" (tabs, branches, CI failures, review comments), add **Agent Orchestrator (AO)** as a manager layer:
+
+- **SCF (OneContext + OpenViking + GSD)** = memory + context retrieval + execution discipline
+- **AO** = parallel session orchestration + PR/CI/review plumbing automation
+
+This repo includes an AO integration pack under `integrations/agent-orchestrator/` (templates, bridge scripts, and progressive-disclosure skills).
+
 ## What Are the Upstream Projects?
 
 | Project | What it does | Repository |
@@ -64,8 +73,9 @@ Silent Context Foundry gives all your AI terminals a **shared, persistent, searc
 | **OpenViking** | Local vector database + semantic search engine. Stores files, vectorizes them, and provides a search API. | [volcengine/OpenViking](https://github.com/volcengine/OpenViking) |
 | **OneContext** | Timeline-structured database of AI interactions. Records events, sessions, and conversation turns. | [TheAgentContextLab/OneContext](https://github.com/TheAgentContextLab/OneContext) |
 | **GSD** | "Get Shit Done" -- an execution discipline framework. Forces AI agents to follow discuss → plan → execute → verify instead of ad-hoc problem solving. Requires context warmup (check OneContext + OpenViking first), evidence-based verification, and clear role separation in multi-agent collaboration. | [gsd-build/get-shit-done](https://github.com/gsd-build/get-shit-done) |
+| **Agent Orchestrator (optional)** | Orchestrates parallel coding agents and automates session/PR/CI/review workflows. | [ComposioHQ/agent-orchestrator](https://github.com/ComposioHQ/agent-orchestrator) |
 
-This repo does **not** ship upstream source code. It provides the **integration layer** that makes them work together as a unified system: the daemon that watches and sanitizes, the MCP bridge, the deployment scripts, the health checks.
+This repo does **not** ship upstream source code. It provides the **integration layer** that makes them work together as a unified system: the daemon that watches and sanitizes, the MCP bridge, the deployment scripts, the health checks, and (optionally) an AO manager-layer integration pack.
 
 **Why GSD matters in this stack:** OneContext and OpenViking give your AI tools memory. GSD gives them *discipline*. Without it, an AI that can search past sessions will still skip verification, ignore old decisions, and jump straight to answers without evidence. GSD enforces the workflow: warm up context first, plan before executing, verify with proof before claiming done.
 
@@ -186,13 +196,17 @@ silent-context-foundry/
 │   ├── openviking_mcp.py         # MCP server: 4 tools for search & save
 │   ├── start_openviking.sh       # OpenViking launcher with safety checks
 │   ├── context_healthcheck.sh    # Comprehensive health check
-│   ├── unified_context_deploy.sh # Deploy: sync, patch launchd, reload
+│   ├── unified_context_deploy.sh # Deploy: sync scripts/skills, patch launchd, reload
+│   ├── install_agent_orchestrator.sh # Install ao + pnpm (optional manager layer)
+│   ├── scf_context_prewarm.sh    # Shell helper for context prewarm
+│   ├── scf_ao_spawn_from_plan.sh # Bridge GSD task list -> AO execution
 │   └── patch_openviking_semantic_processor.py  # Optional VLM quiet patch
 ├── templates/
 │   ├── launchd/                  # macOS LaunchAgent plists
 │   └── systemd-user/             # Linux systemd user services & timers
 ├── integrations/
-│   └── gsd/workflows/            # GSD health workflow
+│   ├── gsd/workflows/            # GSD health workflow
+│   └── agent-orchestrator/       # AO manager-layer templates, skills, examples
 ├── examples/
 │   └── ov.conf.template.json     # OpenViking config template
 ├── docs/
@@ -249,6 +263,7 @@ Key variables:
 
 - **OpenViking VLM provider support**: Some OpenViking builds only support `openai`/`volcengine` in VLMFactory. If your config uses `gemini`, semantic summary generation may spam logs. Use `scripts/patch_openviking_semantic_processor.py` to enable quiet fallback.
 - **macOS vs Linux**: The deploy script generates launchd plists on macOS. On Linux, use the provided systemd templates instead.
+- **AO is optional**: SCF is still useful without AO. Add AO when your bottleneck becomes parallel agent execution management.
 
 ## Upstream & Forks
 
@@ -316,6 +331,15 @@ Silent Context Foundry 让你所有的 AI 终端共享**持久化、可搜索的
 4. **OneContext**（可选）提供所有 AI 交互的结构化时间线数据库，支持按事件、会话、对话轮次搜索。
 
 **最终效果：** 当你打开一个新的 Claude Code 会话问"上周修 auth bug 的时候我试了什么方法？"，MCP 服务器会跨所有历史终端会话搜索 -- 无论当时用的是哪个 AI 工具 -- 并返回相关上下文。
+
+## 可选第 4 层：Agent Orchestrator（AO，经理层）
+
+SCF 解决的是共享记忆、上下文检索和流程纪律（GSD），但它不负责替你管理多个 coding agent 的并行执行。如果你的瓶颈已经变成“盯终端、盯分支、盯 CI、盯 review 评论”，可以把 **Agent Orchestrator (AO)** 接到 SCF 之上：
+
+- **SCF（OneContext + OpenViking + GSD）**：记忆 + 检索 + 纪律
+- **AO**：并行会话编排 + PR/CI/review 流程自动化
+
+本仓库已提供 AO 集成包：`integrations/agent-orchestrator/`（模板、桥接脚本、渐进式 skill）。
 
 ## 上游项目是什么？
 

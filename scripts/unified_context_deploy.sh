@@ -11,6 +11,7 @@ CLAUDE_GSD_LINK="${CLAUDE_GSD_LINK:-$HOME_DIR/.claude/get-shit-done}"
 UNIFIED_CONTEXT_STORAGE_ROOT="${UNIFIED_CONTEXT_STORAGE_ROOT:-${OPENVIKING_STORAGE_ROOT:-$HOME_DIR/.unified_context_data}}"
 PATCH_LAUNCHD="${PATCH_LAUNCHD:-1}"
 RELOAD_LAUNCHD="${RELOAD_LAUNCHD:-1}"
+SYNC_SCF_AO_SKILLS="${SYNC_SCF_AO_SKILLS:-1}"
 
 OV_SCRIPT_TARGETS=(
   "$HOME_DIR/.codex/skills/openviking-memory-sync/scripts"
@@ -21,6 +22,12 @@ OV_SCRIPT_TARGETS=(
 GSD_RUNTIME_TARGETS=(
   "$HOME_DIR/.gemini/antigravity/skills/gsd-v1"
   "$HOME_DIR/.agents/skills/gsd-v1"
+)
+
+SCF_SKILL_ROOT_TARGETS=(
+  "$HOME_DIR/.codex/skills"
+  "$HOME_DIR/.gemini/antigravity/skills"
+  "$HOME_DIR/.agents/skills"
 )
 
 log() { echo "[deploy] $*"; }
@@ -105,6 +112,27 @@ if [ -f "$REPO_ROOT/integrations/gsd/workflows/health.md" ]; then
   do
     sync_file_if_parent_exists "$REPO_ROOT/integrations/gsd/workflows/health.md" "$wf_target"
   done
+fi
+
+if [ "$SYNC_SCF_AO_SKILLS" = "1" ] && [ -d "$REPO_ROOT/integrations/agent-orchestrator/skills" ]; then
+  for skill_root in "${SCF_SKILL_ROOT_TARGETS[@]}"; do
+    if [ ! -d "$skill_root" ]; then
+      log "skip AO skill sync (missing root): $skill_root"
+      continue
+    fi
+    for src_skill in "$REPO_ROOT"/integrations/agent-orchestrator/skills/*; do
+      [ -d "$src_skill" ] || continue
+      [ -f "$src_skill/SKILL.md" ] || continue
+      dst_skill="$skill_root/$(basename "$src_skill")"
+      sync_dir "$src_skill" "$dst_skill"
+    done
+    if [ -f "$REPO_ROOT/integrations/agent-orchestrator/skills/ROUTING.md" ]; then
+      cp "$REPO_ROOT/integrations/agent-orchestrator/skills/ROUTING.md" "$skill_root/SCF_AO_ROUTING.md"
+      log "synced file: integrations/agent-orchestrator/skills/ROUTING.md -> $skill_root/SCF_AO_ROUTING.md"
+    fi
+  done
+else
+  log "SCF AO skill sync skipped"
 fi
 
 if [ "$PATCH_LAUNCHD" = "1" ] && command -v launchctl >/dev/null 2>&1; then

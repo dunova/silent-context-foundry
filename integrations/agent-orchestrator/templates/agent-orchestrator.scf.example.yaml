@@ -1,0 +1,69 @@
+# Agent Orchestrator config for Silent Context Foundry (SCF)
+# Conservative defaults:
+# - tmux + codex + clone isolation
+# - no auto-merge
+# - CI/review can be auto-routed back to agents
+
+port: 3000
+
+defaults:
+  runtime: tmux
+  agent: codex
+  workspace: clone
+  notifiers: [desktop]
+
+projects:
+  scf:
+    name: Silent Context Foundry
+    repo: dunova/Silent-Context-Foundry
+    path: /Volumes/AI/GitHub/Silent-Context-Foundry
+    defaultBranch: main
+    sessionPrefix: scf
+    agentRules: |
+      This repository is an integration layer for OneContext + OpenViking + GSD.
+      Before implementation, do context prewarm:
+      1) onecontext/aline exact search (broad -> deep)
+      2) OpenViking semantic search via MCP if available
+      Follow GSD discipline: discuss -> plan -> execute -> verify.
+      Do not enable auto-merge unless a human explicitly approves.
+
+  openviking:
+    name: OpenViking
+    repo: volcengine/OpenViking
+    path: /Volumes/AI/GitHub/OpenViking
+    defaultBranch: main
+    sessionPrefix: ov
+
+  worldmonitor:
+    name: worldmonitor
+    repo: koala73/worldmonitor
+    path: /Volumes/AI/GitHub/worldmonitor
+    defaultBranch: main
+    sessionPrefix: wm
+
+# Optional: add your local forks (recommended for real work)
+#  openviking-fork:
+#    name: OpenViking Fork
+#    repo: dunova/OpenViking
+#    path: /Volumes/AI/GitHub/OpenViking
+#    defaultBranch: main
+#    sessionPrefix: ovf
+
+reactions:
+  ci-failed:
+    auto: true
+    action: send-to-agent
+    retries: 2
+    escalateAfter: 2
+  changes-requested:
+    auto: true
+    action: send-to-agent
+    escalateAfter: 30m
+  approved-and-green:
+    auto: false
+    action: notify
+    priority: action
+  agent-stuck:
+    auto: true
+    action: notify
+    priority: urgent
