@@ -63,9 +63,11 @@ Silent Context Foundry gives all your AI terminals a **shared, persistent, searc
 |---------|-------------|------------|
 | **OpenViking** | Local vector database + semantic search engine. Stores files, vectorizes them, and provides a search API. | [volcengine/OpenViking](https://github.com/volcengine/OpenViking) |
 | **OneContext** | Timeline-structured database of AI interactions. Records events, sessions, and conversation turns. | [TheAgentContextLab/OneContext](https://github.com/TheAgentContextLab/OneContext) |
-| **GSD** | "Get Shit Done" -- a task/workflow framework for AI agents. | [gsd-build/get-shit-done](https://github.com/gsd-build/get-shit-done) |
+| **GSD** | "Get Shit Done" -- an execution discipline framework. Forces AI agents to follow discuss → plan → execute → verify instead of ad-hoc problem solving. Requires context warmup (check OneContext + OpenViking first), evidence-based verification, and clear role separation in multi-agent collaboration. | [gsd-build/get-shit-done](https://github.com/gsd-build/get-shit-done) |
 
 This repo does **not** ship upstream source code. It provides the **integration layer** that makes them work together as a unified system: the daemon that watches and sanitizes, the MCP bridge, the deployment scripts, the health checks.
+
+**Why GSD matters in this stack:** OneContext and OpenViking give your AI tools memory. GSD gives them *discipline*. Without it, an AI that can search past sessions will still skip verification, ignore old decisions, and jump straight to answers without evidence. GSD enforces the workflow: warm up context first, plan before executing, verify with proof before claiming done.
 
 ## What Problems Does the Integration Solve?
 
@@ -321,9 +323,11 @@ Silent Context Foundry 让你所有的 AI 终端共享**持久化、可搜索的
 |------|------|------|
 | **OpenViking** | 本地向量数据库 + 语义搜索引擎。存储文件、向量化、提供搜索 API。 | [volcengine/OpenViking](https://github.com/volcengine/OpenViking) |
 | **OneContext** | AI 交互的时间线结构化数据库。记录事件、会话和对话轮次。 | [TheAgentContextLab/OneContext](https://github.com/TheAgentContextLab/OneContext) |
-| **GSD** | "Get Shit Done" -- AI agent 的任务/工作流框架。 | [gsd-build/get-shit-done](https://github.com/gsd-build/get-shit-done) |
+| **GSD** | "Get Shit Done" -- 执行纪律框架。强制 AI 按 discuss → plan → execute → verify 流程执行，杜绝跳步和返工。要求执行前先做上下文预热（查 OneContext + OpenViking），验收时提供证据和产物，多终端协作时明确角色分工。 | [gsd-build/get-shit-done](https://github.com/gsd-build/get-shit-done) |
 
 本仓库**不包含**上游源码。它提供的是让三者协同工作的**集成层**：监听和清洗的守护进程、MCP 桥接、部署脚本、健康检查。
+
+**为什么需要 GSD：** OneContext 和 OpenViking 给你的 AI 工具提供记忆，GSD 给它们提供*纪律*。没有它，AI 即使能搜索历史会话，仍然会跳过验证、忽略旧决策、不提供证据就声称"搞定了"。GSD 强制执行流程：先预热上下文，规划后再执行，用证据验收后才算完成。
 
 ## 集成解决了什么问题？
 
