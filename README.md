@@ -66,6 +66,63 @@ SCF gives your AI tools shared memory and process discipline (with GSD), but it 
 
 This repo includes an AO integration pack under `integrations/agent-orchestrator/` (templates, bridge scripts, and progressive-disclosure skills).
 
+## 4-Layer Architecture (Recommended)
+
+Use SCF + AO as a layered system instead of a single monolith:
+
+1. **Memory Layer (OneContext + OpenViking)**
+- OneContext = exact, structured history lookup (event/session/turn)
+- OpenViking = semantic recall across terminals and shell history
+
+2. **Discipline Layer (GSD)**
+- Forces discuss -> plan -> execute -> verify
+- Requires context warmup before execution
+- Requires evidence before completion
+
+3. **Execution Layer (Coding Agents)**
+- Codex / Claude Code / Aider / others implement code changes
+
+4. **Manager Layer (AO, optional)**
+- Spawns and isolates parallel sessions
+- Tracks status, PRs, CI, reviews
+- Routes routine feedback back to the right worker
+- Escalates only when human judgment is needed
+
+**Rule of thumb:** SCF tells agents what the past says and how to work; AO helps them run in parallel without you doing the plumbing.
+
+## Module Map (What Lives Where)
+
+### Core SCF runtime
+
+- `scripts/viking_daemon.py`
+  - Watches terminal histories and exports sanitized markdown
+- `scripts/openviking_mcp.py`
+  - MCP bridge exposing unified search/save/health tools
+- `scripts/start_openviking.sh`
+  - Starts OpenViking safely (ports, config, retries)
+- `scripts/context_healthcheck.sh`
+  - Health checks for the whole stack
+- `scripts/unified_context_deploy.sh`
+  - Syncs scripts/skills and patches runtime services
+
+### GSD integration
+
+- `integrations/gsd/workflows/`
+  - GSD workflow snippets (health and process hooks)
+
+### AO manager-layer integration (optional)
+
+- `integrations/agent-orchestrator/templates/`
+  - AO config templates for SCF-managed environments
+- `integrations/agent-orchestrator/skills/`
+  - Progressive-disclosure skills (L1-L4)
+- `scripts/install_agent_orchestrator.sh`
+  - Installs `ao` + `pnpm` and checks prerequisites
+- `scripts/scf_context_prewarm.sh`
+  - Shell helper for context warmup before GSD/AO actions
+- `scripts/scf_ao_spawn_from_plan.sh`
+  - Bridges GSD task lists into AO worker sessions
+
 ## What Are the Upstream Projects?
 
 | Project | What it does | Repository |
@@ -340,6 +397,63 @@ SCF 解决的是共享记忆、上下文检索和流程纪律（GSD），但它�
 - **AO**：并行会话编排 + PR/CI/review 流程自动化
 
 本仓库已提供 AO 集成包：`integrations/agent-orchestrator/`（模板、桥接脚本、渐进式 skill）。
+
+## 四层架构（推荐）
+
+把 SCF + AO 当成分层系统来用，而不是一个“大工具”：
+
+1. **记忆层（OneContext + OpenViking）**
+- OneContext：精确、结构化历史检索（event/session/turn）
+- OpenViking：跨终端与 shell 历史的语义召回
+
+2. **纪律层（GSD）**
+- 强制 `discuss -> plan -> execute -> verify`
+- 执行前必须做上下文预热
+- 完成前必须给证据
+
+3. **执行层（Coding Agents）**
+- Codex / Claude Code / Aider 等实际写代码
+
+4. **经理层（AO，可选）**
+- 并行 spawn worker sessions
+- 隔离 workspace/branch/tmux 会话
+- 跟踪 PR/CI/review 状态并自动回灌
+- 只在需要人判断时升级给你
+
+**一句话：** SCF 负责“记忆 + 方法论”，AO 负责“并行执行编排”。
+
+## 模块地图（各目录/脚本做什么）
+
+### SCF 核心运行层
+
+- `scripts/viking_daemon.py`
+  - 监听终端历史并清洗、导出 markdown
+- `scripts/openviking_mcp.py`
+  - MCP 桥接（统一搜索/保存/健康检查）
+- `scripts/start_openviking.sh`
+  - 安全启动 OpenViking（端口、配置、重试）
+- `scripts/context_healthcheck.sh`
+  - 全栈健康检查
+- `scripts/unified_context_deploy.sh`
+  - 同步脚本/skills，并修补运行时服务配置
+
+### GSD 集成层
+
+- `integrations/gsd/workflows/`
+  - GSD 工作流片段（健康检查与流程钩子）
+
+### AO 经理层集成（可选）
+
+- `integrations/agent-orchestrator/templates/`
+  - SCF 场景 AO 配置模板
+- `integrations/agent-orchestrator/skills/`
+  - 渐进式披露 skill（L1-L4）
+- `scripts/install_agent_orchestrator.sh`
+  - 安装 `ao` + `pnpm` 并检查前置依赖
+- `scripts/scf_context_prewarm.sh`
+  - GSD/AO 操作前的上下文预热辅助脚本
+- `scripts/scf_ao_spawn_from_plan.sh`
+  - 把 GSD 任务清单批量转成 AO worker sessions
 
 ## 上游项目是什么？
 
