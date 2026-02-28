@@ -67,7 +67,22 @@ A unified context system is only as good as its integrations. Terminals often ha
 - **Config file**: `~/.gemini/antigravity/mcp_config.json`
 - Configuration handles generic MCPs cleanly but relies on accurate script targets (`openviking_mcp.py`).
 
-## 4. General Diagnosis Advice
+## 4. Hidden Config Override (Path Drift Still Happens)
+
+Even after fixing `~/.claude/settings.json`, some clients may still read other persisted config files first.
+
+**Common hidden sources to verify:**
+- `~/.claude.json` (global Claude CLI state; can include `mcpServers`)
+- `~/.codex/config.toml`
+- `~/.gemini/antigravity/mcp_config.json`
+
+**Symptom:**
+MCP list/health still points to an old script path (for example a removed `~/.gemini/.../openviking_mcp.py`) even though your primary config is already fixed.
+
+**Fix:**
+Ensure all active client config sources reference the same absolute script path.
+
+## 5. General Diagnosis Advice
 1. **Healthcheck Command**: Always run the included `context_healthcheck.sh --deep`. It probes `/health` and forces a dummy query against `/api/v1/search/find`.
 2. **Reviewing Logs**: Keep an eye on `.context_system/logs/` or `journalctl --user -u viking-daemon`.
 3. **Empty Searches?**: If `onecontext search` finds nothing for "today", verify the actual JSONL sources (like `history.jsonl`) are being actively modified by your terminals. Sometimes terminals change their implicit storage paths.

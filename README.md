@@ -244,6 +244,14 @@ Add the MCP server to your AI client's config. For Claude Code (`~/.claude/mcp_s
 
 The MCP server runs over stdio and exposes 4 tools. Once connected, your AI can search across all past sessions automatically.
 
+## Troubleshooting Index
+
+See [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) for known failures and fixes. Start with:
+
+1. OpenViking crash loops caused by `litellm` version drift.
+2. `realign` import failures in launchd/systemd watcher/worker daemons.
+3. MCP script path drift across clients (`~/.claude/settings.json`, `~/.claude.json`, `~/.codex/config.toml`, `~/.config/opencode/opencode.json`, `~/.openclaw/workspace/config/mcporter.json`).
+
 ## Repository Layout
 
 ```
