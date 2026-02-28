@@ -268,6 +268,7 @@ silent-context-foundry/
 │   └── ov.conf.template.json     # OpenViking config template
 ├── docs/
 │   ├── ARCHITECTURE.md
+│   ├── TROUBLESHOOTING.md        # Known issues & deployment gotchas
 │   └── RELEASE_CHECKLIST.md
 ├── .env.example                  # All environment variables documented
 ├── SECURITY.md                   # Threat model and local secret hygiene
