@@ -7,6 +7,7 @@ from datetime import datetime
 import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import time
 from urllib.parse import parse_qs, urlparse
 
 try:
@@ -27,12 +28,32 @@ except Exception:  # pragma: no cover
     )
 
 
+def _env_int(name: str, default: int, min_v: int, max_v: int) -> int:
+    raw = os.environ.get(name, str(default)).strip()
+    try:
+        value = int(raw)
+    except Exception:
+        value = default
+    return max(min_v, min(max_v, value))
+
+
+def _env_float(name: str, default: float, min_v: float, max_v: float) -> float:
+    raw = os.environ.get(name, str(default)).strip()
+    try:
+        value = float(raw)
+    except Exception:
+        value = default
+    return max(min_v, min(max_v, value))
+
+
 HOST = os.environ.get("CONTEXT_VIEWER_HOST", "127.0.0.1")
-PORT = int(os.environ.get("CONTEXT_VIEWER_PORT", "37677"))
+PORT = _env_int("CONTEXT_VIEWER_PORT", 37677, 1, 65535)
 VIEWER_TOKEN = os.environ.get("CONTEXT_VIEWER_TOKEN", "").strip()
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
-MAX_POST_BYTES = int(os.environ.get("CONTEXT_VIEWER_MAX_POST_BYTES", "1048576"))
-MAX_BATCH_IDS = int(os.environ.get("CONTEXT_VIEWER_MAX_BATCH_IDS", "500"))
+MAX_POST_BYTES = _env_int("CONTEXT_VIEWER_MAX_POST_BYTES", 1048576, 1024, 16 * 1024 * 1024)
+MAX_BATCH_IDS = _env_int("CONTEXT_VIEWER_MAX_BATCH_IDS", 500, 1, 2000)
+SSE_INTERVAL_SEC = _env_float("CONTEXT_VIEWER_SSE_INTERVAL_SEC", 1.0, 0.2, 60.0)
+SSE_MAX_TICKS = _env_int("CONTEXT_VIEWER_SSE_MAX_TICKS", 120, 1, 3600)
 
 
 def _json_bytes(payload: dict) -> bytes:
@@ -131,14 +152,18 @@ es.onmessage = (e)=>{ try{ const d=JSON.parse(e.data); document.title='Context M
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
             self.send_header("Connection", "keep-alive")
+            self.send_header("X-Accel-Buffering", "no")
             self.end_headers()
-            for _ in range(120):
+            for _ in range(SSE_MAX_TICKS):
                 try:
                     sync = sync_index_from_storage()
                     data = {"at": datetime.now().isoformat(), "sync": sync, **index_stats()}
                     chunk = f"data: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8")
                     self.wfile.write(chunk)
                     self.wfile.flush()
+                    time.sleep(SSE_INTERVAL_SEC)
+                except (BrokenPipeError, ConnectionResetError):
+                    break
                 except Exception:
                     break
             return

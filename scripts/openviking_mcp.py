@@ -33,6 +33,7 @@ except Exception:  # pragma: no cover - module import path compatibility
     )
 
 ALLOW_NOOP_MCP = os.environ.get("ALLOW_NOOP_MCP", "0") == "1"
+_MCP_INIT_ERROR: str = ""
 
 
 class _NoopMCP:
@@ -52,25 +53,19 @@ class _NoopMCP:
 
 def _create_mcp_server():
     """Create MCP server; degrade to no-op when FastMCP is mocked/unavailable."""
+    global _MCP_INIT_ERROR
     try:
         if FastMCP is None:
-            if ALLOW_NOOP_MCP:
-                return _NoopMCP()
             raise RuntimeError("FastMCP is unavailable")
         if getattr(FastMCP, "__module__", "").startswith("unittest.mock"):
-            if ALLOW_NOOP_MCP:
-                return _NoopMCP()
             raise RuntimeError("FastMCP is mocked")
         server = FastMCP("OpenViking Global Memory Server")
         if getattr(type(server), "__module__", "").startswith("unittest.mock"):
-            if ALLOW_NOOP_MCP:
-                return _NoopMCP()
             raise RuntimeError("FastMCP server is mocked")
         return server
-    except Exception:
-        if ALLOW_NOOP_MCP:
-            return _NoopMCP()
-        raise
+    except Exception as exc:
+        _MCP_INIT_ERROR = str(exc)
+        return _NoopMCP()
 
 
 mcp = _create_mcp_server()
@@ -717,12 +712,15 @@ def query_viking_memory(query: str, limit: int = 3) -> str:
     """
     Search OpenViking global memory for relevant context.
     """
-    if not _decide_retrieval_intent(query):
+    safe_query = strip_private_blocks((query or "").strip())
+    if not safe_query:
+        return "Failed to query OpenViking: query is empty after private-block sanitization."
+    if not _decide_retrieval_intent(safe_query):
         return "Intent Check: Query categorized as common affirmation/chat. Skipped memory retrieval to save context."
 
     safe_limit = max(1, min(int(limit), 50))
     payload = {
-        "query": query,
+        "query": safe_query,
         "target_uri": "viking://resources",
         "limit": safe_limit,
     }
@@ -731,8 +729,8 @@ def query_viking_memory(query: str, limit: int = 3) -> str:
         output = []
 
         # Hybrid retrieval: exact local scan for opaque IDs/tags, then semantic API.
-        if _looks_like_identifier_query(query):
-            exact_matches = _local_exact_resource_matches(query, limit=max(1, safe_limit))
+        if _looks_like_identifier_query(safe_query):
+            exact_matches = _local_exact_resource_matches(safe_query, limit=max(1, safe_limit))
             if exact_matches:
                 output.append("--- EXACT LOCAL RESOURCE MATCHES (ID/TAG fallback) ---")
                 for item in exact_matches:
@@ -765,30 +763,33 @@ def search_onecontext_history(query: str, search_type: str = "all", limit: int =
     """
     Search OneContext history. CLI-first, sqlite fallback for compatibility.
     """
-    if not _decide_retrieval_intent(query):
+    safe_query = strip_private_blocks((query or "").strip())
+    if not safe_query:
+        return "Intent Check: Empty query after private-block sanitization. Skipped retrieval."
+    if not _decide_retrieval_intent(safe_query):
         return "Intent Check: Query categorized as common affirmation/chat. Skipped sqlite DB retrieval to save context."
 
     normalized_type = _resolve_search_type(search_type)
     safe_limit = max(1, min(int(limit), 100))
 
-    cli_result = _try_cli_search(query, normalized_type, safe_limit, no_regex)
-    if cli_result and not (_onecontext_no_match(cli_result) and normalized_type == "all" and _looks_like_identifier_query(query)):
+    cli_result = _try_cli_search(safe_query, normalized_type, safe_limit, no_regex)
+    if cli_result and not (_onecontext_no_match(cli_result) and normalized_type == "all" and _looks_like_identifier_query(safe_query)):
         return cli_result
 
-    if normalized_type == "all" and _looks_like_identifier_query(query):
-        cli_content_result = _try_cli_search(query, "content", safe_limit, no_regex)
+    if normalized_type == "all" and _looks_like_identifier_query(safe_query):
+        cli_content_result = _try_cli_search(safe_query, "content", safe_limit, no_regex)
         if cli_content_result and not _onecontext_no_match(cli_content_result):
             return (
                 "Note: auto-fallback to OneContext content search for ID/tag query after `all` returned no matches.\n"
                 + cli_content_result
             )
 
-    sqlite_result = _sqlite_search(query, normalized_type, safe_limit, no_regex)
-    if not (_onecontext_no_match(sqlite_result) and normalized_type == "all" and _looks_like_identifier_query(query)):
+    sqlite_result = _sqlite_search(safe_query, normalized_type, safe_limit, no_regex)
+    if not (_onecontext_no_match(sqlite_result) and normalized_type == "all" and _looks_like_identifier_query(safe_query)):
         return sqlite_result
 
-    if normalized_type == "all" and _looks_like_identifier_query(query):
-        sqlite_content = _sqlite_search(query, "content", safe_limit, no_regex)
+    if normalized_type == "all" and _looks_like_identifier_query(safe_query):
+        sqlite_content = _sqlite_search(safe_query, "content", safe_limit, no_regex)
         if not _onecontext_no_match(sqlite_content):
             return (
                 "Note: auto-fallback to OneContext content search for ID/tag query after `all` returned no matches.\n"
@@ -859,6 +860,7 @@ if __name__ == "__main__":
     if isinstance(mcp, _NoopMCP) and not ALLOW_NOOP_MCP:
         raise SystemExit(
             "FastMCP is unavailable; refusing to run in no-op mode. "
+            f"reason={_MCP_INIT_ERROR or 'unknown'}. "
             "Install mcp.server.fastmcp or set ALLOW_NOOP_MCP=1 for test-only execution."
         )
     mcp.run(transport="stdio")

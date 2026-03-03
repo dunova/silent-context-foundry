@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import argparse
+import hashlib
 import json
 import re
 import sqlite3
@@ -49,8 +50,16 @@ def _norm_obs(raw: dict) -> dict:
 
     title = _sanitize_text(str(raw.get("title") or "imported memory"))[:240]
     content = _sanitize_text(str(raw.get("content") or ""))
+    created_at_epoch = int(raw.get("created_at_epoch") or int(datetime.now().timestamp()))
+    fingerprint = str(raw.get("fingerprint") or "").strip()
+    if not fingerprint and content:
+        fingerprint = hashlib.sha256(
+            f"{raw.get('source_type') or 'import'}|{raw.get('session_id') or 'imported'}|{title}|{content}|{created_at_epoch}".encode(
+                "utf-8"
+            )
+        ).hexdigest()
     return {
-        "fingerprint": str(raw.get("fingerprint") or ""),
+        "fingerprint": fingerprint,
         "source_type": str(raw.get("source_type") or "import"),
         "session_id": str(raw.get("session_id") or "imported"),
         "title": title,
@@ -58,14 +67,15 @@ def _norm_obs(raw: dict) -> dict:
         "tags_json": json.dumps(clean_tags, ensure_ascii=False),
         "file_path": raw_path,
         "created_at": str(raw.get("created_at") or datetime.now().isoformat()),
-        "created_at_epoch": int(raw.get("created_at_epoch") or int(datetime.now().timestamp())),
+        "created_at_epoch": created_at_epoch,
     }
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Import Context Mesh memories.")
     parser.add_argument("input", help="Input JSON path exported by export_memories.py")
-    args = parser.parse_args()
+    parser.add_argument("--no-sync", action="store_true", help="Skip sync_index_from_storage after import.")
+    args = parser.parse_args(argv)
 
     input_path = Path(args.input).expanduser()
     data = json.loads(input_path.read_text(encoding="utf-8"))
@@ -118,7 +128,8 @@ def main() -> int:
     finally:
         conn.close()
 
-    sync_index_from_storage()
+    if not args.no_sync:
+        sync_index_from_storage()
     print(f"import done inserted={inserted} skipped={skipped} db={db_path}")
     return 0
 
