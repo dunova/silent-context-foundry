@@ -17,6 +17,7 @@ OPENVIKING_FORCE_UPGRADE="${OPENVIKING_FORCE_UPGRADE:-0}"
 OPENVIKING_PORT_WAIT_SEC="${OPENVIKING_PORT_WAIT_SEC:-20}"
 OPENVIKING_GENERATOR_TIMEOUT_SEC="${OPENVIKING_GENERATOR_TIMEOUT_SEC:-20}"
 OPENVIKING_ALLOW_NAS_GENERATOR="${OPENVIKING_ALLOW_NAS_GENERATOR:-0}"
+OPENVIKING_ALLOW_EXTERNAL_GENERATOR="${OPENVIKING_ALLOW_EXTERNAL_GENERATOR:-$OPENVIKING_ALLOW_NAS_GENERATOR}"
 LITELLM_LOCAL_MODEL_COST_MAP="${LITELLM_LOCAL_MODEL_COST_MAP:-True}"
 
 # Load secrets (contains GEMINI_API_KEY / OPENAI_API_KEY)
@@ -193,8 +194,8 @@ fi
 # 4. Generate Configuration (optional; existing config remains valid)
 echo "Generating configuration..."
 export OPENVIKING_DATA_DIR
-if [ -n "$GENERATOR_SCRIPT" ] && [[ "$GENERATOR_SCRIPT" == /Volumes/* ]] && [ "$OPENVIKING_ALLOW_NAS_GENERATOR" != "1" ]; then
-    echo -e "${YELLOW}Warning: Skip NAS generator path ($GENERATOR_SCRIPT). Set OPENVIKING_ALLOW_NAS_GENERATOR=1 to enable.${NC}"
+if [ -n "$GENERATOR_SCRIPT" ] && [ "$OPENVIKING_ALLOW_EXTERNAL_GENERATOR" != "1" ] && [[ "$GENERATOR_SCRIPT" != "$HOME"/* ]]; then
+    echo -e "${YELLOW}Warning: Skip external generator path ($GENERATOR_SCRIPT). Set OPENVIKING_ALLOW_EXTERNAL_GENERATOR=1 to enable.${NC}"
 elif [ -n "$GENERATOR_SCRIPT" ] && [ -f "$GENERATOR_SCRIPT" ]; then
     # Safety: only execute generator scripts owned by the current user
     GENERATOR_OWNER=$(stat -f%u "$GENERATOR_SCRIPT" 2>/dev/null || stat -c%u "$GENERATOR_SCRIPT" 2>/dev/null || echo "-1")
