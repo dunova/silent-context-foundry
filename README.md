@@ -27,6 +27,15 @@ Legacy heavy stack (OneContext/Aline daemon chain) is no longer required for nor
 
 **Net effect:** when you ask "what did I try last week to fix the auth bug?", MCP can still retrieve cross-terminal context, but with much lower background overhead and less risk of multi-agent stalls.
 
+### Hit-First Retrieval Defaults
+
+SCF now defaults to a "hit-first" retrieval chain for messy natural-language queries:
+
+1. Start with short anchors instead of the whole task sentence.
+2. Prefer object names first, then project/path anchors, then date anchors.
+3. Auto-fallback across OneContext CLI, literal search, content search, and sqlite fallback.
+4. Keep semantic retrieval as a补洞 layer, not the primary session locator.
+
 ## Optional 4th Layer: Agent Orchestrator (AO)
 
 SCF gives your AI tools shared memory and process discipline (with GSD), but it does not manage multiple coding-agent sessions for you. If your bottleneck is now "babysitting agents" (tabs, branches, CI failures, review comments), add **Agent Orchestrator (AO)** as a manager layer:
@@ -68,6 +77,8 @@ Use SCF + AO as a layered system instead of a single monolith:
   - Watches terminal histories and exports sanitized markdown
 - `scripts/openviking_mcp.py`
   - MCP bridge exposing unified search/save/health tools
+- `scripts/memory_hit_first_regression.py`
+  - Regression suite for hit-first retrieval, MCP health, memory save/query, and random session tasks
 - `scripts/start_openviking.sh`
   - Starts OpenViking safely (ports, config, retries)
 - `scripts/context_healthcheck.sh`
@@ -117,6 +128,7 @@ The upstream tools are strong individually but don't work together out of the bo
 | OpenViking might be offline when daemon wants to export | Local pending queue with automatic retry |
 | Service startup race conditions (port conflicts) | Port-busy detection, health-wait loops, ordered reload |
 | No unified search across exact + semantic layers | MCP server bridges both: recall exact search + optional semantic search |
+| Long natural-language queries miss the right session | Hit-first query rewrite: object -> path/project -> date, then fallback chain |
 | Config generator scripts on NAS/network paths can hang | Timeout protection, ownership validation |
 | Log files grow unbounded | Rotating file handlers, healthcheck-triggered truncation |
 | File permission leaks | chmod 700 on data dirs, chmod 600 on exported files, ownership checks on source files |
@@ -189,6 +201,10 @@ systemctl --user enable --now context-healthcheck.timer
 bash scripts/context_healthcheck.sh --deep
 ```
 
+```bash
+python3 scripts/memory_hit_first_regression.py
+```
+
 A healthy output (lite mode) looks like:
 ```
 Core:
@@ -235,6 +251,7 @@ silent-context-foundry/
 ├── scripts/
 │   ├── viking_daemon.py          # Background daemon: watch, sanitize, export
 │   ├── openviking_mcp.py         # MCP server: 4 tools for search & save
+│   ├── memory_hit_first_regression.py # Regression suite for retrieval quality
 │   ├── start_openviking.sh       # OpenViking launcher with safety checks
 │   ├── context_healthcheck.sh    # Comprehensive health check
 │   ├── unified_context_deploy.sh # Deploy: sync scripts/skills, patch launchd, reload

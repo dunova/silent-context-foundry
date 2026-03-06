@@ -150,6 +150,40 @@ OPENVIKING_LOCAL_SCAN_READ_BYTES = max(
 OPENVIKING_HEALTH_CACHE_TTL_SEC = max(
     10, int(os.environ.get("OPENVIKING_HEALTH_CACHE_TTL_SEC", "120"))
 )
+QUERY_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "for",
+    "from",
+    "how",
+    "into",
+    "of",
+    "or",
+    "please",
+    "search",
+    "session",
+    "terminal",
+    "the",
+    "this",
+    "to",
+    "use",
+    "with",
+    "x",
+    "继续",
+    "刚才",
+    "功能",
+    "命令",
+    "方案",
+    "搜索",
+    "终端",
+    "调用",
+    "这个",
+    "那个",
+    "研究",
+    "任务",
+    "问题",
+}
 
 
 def _resolve_recall_script() -> str:
@@ -297,24 +331,67 @@ def _build_query_variants(query: str) -> list[str]:
     q = (query or "").strip()
     if not q:
         return []
-    variants: list[str] = [q]
-    # Date-like normalization: 2026-03-02 / 2026/03/02 -> 20260302
-    m = re.fullmatch(r"\s*(\d{4})[-/](\d{1,2})[-/](\d{1,2})\s*", q)
-    if m:
-        y, mm, dd = m.groups()
-        variants.append(f"{y}{int(mm):02d}{int(dd):02d}")
-    # Strip extra whitespace for robust literal search.
-    compact = re.sub(r"\s+", " ", q).strip()
-    if compact and compact not in variants:
-        variants.append(compact)
-    # De-dup while keeping order.
-    out: list[str] = []
-    seen: set[str] = set()
-    for item in variants:
+
+    def _add(out: list[str], seen: set[str], value: str) -> None:
+        item = (value or "").strip()
         if item and item not in seen:
             out.append(item)
             seen.add(item)
-    return out
+
+    def _expand_anchor(anchor: str) -> list[str]:
+        expanded = [anchor]
+        if "/" in anchor:
+            basename = os.path.basename(anchor)
+            if basename and basename not in expanded:
+                expanded.append(basename)
+            stem = os.path.splitext(basename)[0]
+            if stem and stem not in expanded:
+                expanded.append(stem)
+        if any(ch in anchor for ch in "._-"):
+            parts = [part for part in re.split(r"[._/-]+", anchor) if len(part) >= 3]
+            for part in parts[:4]:
+                if part not in expanded:
+                    expanded.append(part)
+        return expanded
+
+    def _latin_tokens(text: str) -> list[str]:
+        items = re.findall(r"[A-Za-z][A-Za-z0-9._/-]{1,}", text)
+        return [item for item in items if item.lower() not in QUERY_STOPWORDS]
+
+    def _cjk_terms(text: str) -> list[str]:
+        parts = re.findall(r"[\u4e00-\u9fff]{2,12}", text)
+        return [part for part in parts if part not in QUERY_STOPWORDS]
+
+    def _anchor_score(token: str) -> tuple[int, int, str]:
+        has_path = 1 if "/" in token or token.startswith("~") else 0
+        has_date = 1 if re.search(r"\d{4}[-/]\d{1,2}[-/]\d{1,2}", token) else 0
+        looks_identifier = 1 if re.search(r"[A-Z]", token) or re.search(r"\d", token) or "_" in token else 0
+        return (has_path + has_date + looks_identifier, len(token), token.lower())
+
+    variants: list[str] = []
+    seen: set[str] = set()
+    compact = re.sub(r"\s+", " ", q).strip()
+
+    m = re.fullmatch(r"\s*(\d{4})[-/](\d{1,2})[-/](\d{1,2})\s*", compact)
+    if m:
+        y, mm, dd = m.groups()
+        _add(variants, seen, f"{y}-{int(mm):02d}-{int(dd):02d}")
+        _add(variants, seen, f"{y}{int(mm):02d}{int(dd):02d}")
+
+    anchors: list[str] = []
+    anchors.extend(re.findall(r"(?:~?/[A-Za-z0-9._/-]+)", q))
+    anchors.extend(_latin_tokens(q))
+    anchors.extend(_cjk_terms(q))
+    anchors = sorted(set(anchors), key=_anchor_score, reverse=True)
+    for anchor in anchors[:8]:
+        for item in _expand_anchor(anchor):
+            _add(variants, seen, item)
+            lowered = item.lower()
+            if lowered != item:
+                _add(variants, seen, lowered)
+
+    _add(variants, seen, compact)
+    return variants
 
 
 def _normalize_tags(tags: list[str] | str | None) -> list[str]:
